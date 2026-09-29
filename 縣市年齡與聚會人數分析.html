@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>各縣市年齡與聚會人數分析</title>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #64748b;
+      --line: #dce4ec;
+      --panel: #ffffff;
+      --canvas: #f4f7fa;
+      --navy: #173f5f;
+      --accent: #2c7da0;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", Arial, sans-serif; }
+    .page { max-width: 1500px; margin: 0 auto; padding: 38px 28px 48px; }
+    .title-row { display: flex; gap: 20px; align-items: end; justify-content: space-between; border-bottom: 2px solid var(--navy); padding-bottom: 16px; }
+    h1 { margin: 0; font-size: clamp(24px, 3vw, 36px); letter-spacing: .02em; color: var(--navy); }
+    .subtitle { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+    .source { text-align: right; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .source a { color: #1f6690; text-decoration: underline; text-underline-offset: 2px; }
+    .controls { display: flex; justify-content: space-between; align-items: center; gap: 18px; flex-wrap: wrap; margin: 26px 0 18px; }
+    .tabs, .mode-switch { display: flex; flex-wrap: wrap; gap: 8px; }
+    button { appearance: none; border: 1px solid #b9c8d6; background: #fff; color: #3c5062; font: inherit; font-size: 14px; cursor: pointer; padding: 9px 14px; border-radius: 5px; }
+    button[aria-pressed="true"] { color: #fff; background: var(--navy); border-color: var(--navy); font-weight: 700; }
+    .mode-switch button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+    .note { margin: 0 0 18px; font-size: 13px; color: var(--muted); }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 22px; }
+    .panel-heading { display: flex; gap: 14px; justify-content: space-between; align-items: baseline; margin-bottom: 16px; }
+    h2 { margin: 0; font-size: 21px; color: var(--navy); }
+    .unit { color: var(--muted); font-size: 13px; }
+    .legend { display: flex; gap: 8px 16px; flex-wrap: wrap; margin: 0 0 14px 140px; font-size: 13px; }
+    button.legend-item { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); font-size: 13px; }
+    button.legend-item[aria-pressed="true"] { background: transparent; color: var(--ink); border: 0; font-weight: 400; }
+    button.legend-item[aria-pressed="false"] { background: transparent; color: var(--muted); border: 0; font-weight: 400; opacity: .42; text-decoration: line-through; }
+    .swatch { width: 12px; height: 12px; display: inline-block; border-radius: 2px; }
+    .chart { display: grid; gap: 8px; }
+    .chart-row { display: grid; grid-template-columns: 116px minmax(0, 1fr) 76px; align-items: center; gap: 12px; min-height: 24px; }
+    .county-label { text-align: right; font-size: 14px; white-space: nowrap; }
+    .track { width: 100%; height: 23px; overflow: hidden; background: #edf2f7; border-radius: 3px; }
+    .bar-fill { height: 100%; display: flex; overflow: hidden; border-radius: 3px; }
+    .segment { height: 100%; min-width: 0; position: relative; }
+    .segment:focus-visible { outline: 2px solid #0d5c83; outline-offset: -2px; }
+    .total-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .table-wrap { overflow-x: auto; margin-top: 28px; border: 1px solid var(--line); border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; min-width: 940px; font-size: 13px; }
+    th { background: #eaf1f6; color: #29485f; padding: 10px 9px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+    th:first-child, td:first-child { text-align: left; position: sticky; left: 0; }
+    th:first-child { background: #eaf1f6; }
+    td { padding: 9px; border-bottom: 1px solid #e9eef3; text-align: right; white-space: nowrap; }
+    td:first-child { background: #fff; font-weight: 700; }
+    tr:last-child td { border-bottom: 0; }
+    .footer { margin-top: 18px; font-size: 12px; color: var(--muted); line-height: 1.65; }
+    #tooltip { display: none; position: fixed; z-index: 10; pointer-events: none; max-width: 250px; padding: 10px 12px; color: #fff; background: #17212b; border-radius: 5px; box-shadow: 0 8px 18px rgba(15, 23, 42, .22); font-size: 13px; line-height: 1.55; }
+    #tooltip strong { display: block; margin-bottom: 3px; font-size: 14px; }
+    @media (max-width: 700px) {
+      .page { padding: 24px 14px 32px; }
+      .title-row { align-items: flex-start; flex-direction: column; }
+      .source { text-align: left; }
+      .panel { padding: 15px; }
+      .legend { margin-left: 0; }
+      .chart-row { grid-template-columns: 72px minmax(0, 1fr) 52px; gap: 7px; }
+      .county-label { font-size: 12px; }
+      .total-label { font-size: 11px; }
+      .track { height: 21px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="title-row">
+      <div>
+        <h1>各縣市年齡與聚會人數分析</h1>
+        <p class="subtitle">2024 年各縣市人口結構與教會聚會人數</p>
+      </div>
+      <div id="source" class="source"></div>
+    </header>
+
+    <section class="controls" aria-label="圖表設定">
+      <div class="tabs" role="group" aria-label="分析主題">
+        <button type="button" data-section="population" aria-pressed="true">人口年齡結構</button>
+        <button type="button" data-section="gathering" aria-pressed="false">聚會人數結構</button>
+        <button type="button" data-section="estimate" aria-pressed="false">年齡推估聚會人數</button>
+      </div>
+      <div class="mode-switch" role="group" aria-label="顯示方式">
+        <button type="button" data-mode="count" aria-pressed="true">人數</button>
+        <button type="button" data-mode="share" aria-pressed="false">比例</button>
+      </div>
+    </section>
+
+    <p id="method-note" class="note"></p>
+    <section class="panel" aria-labelledby="chart-title">
+      <div class="panel-heading">
+        <h2 id="chart-title"></h2>
+        <span id="unit" class="unit"></span>
+      </div>
+      <div id="legend" class="legend" aria-label="圖例"></div>
+      <div id="chart" class="chart" role="img" aria-label="各縣市堆疊長條圖"></div>
+      <div class="table-wrap">
+        <table aria-label="各縣市詳細統計表">
+          <thead id="table-head"></thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <div id="tooltip" role="tooltip"></div>
+  <script>
+    const DATA = {"generatedAt":"2024 年資料","populationGroups":[{"key":"age0to4","label":"0–4歲","color":"#4F7CAC"},{"key":"age5to12","label":"5–12歲","color":"#7FB3D5"},{"key":"age13to22","label":"13–22歲","color":"#F3B562"},{"key":"age23to30","label":"23–30歲","color":"#E77D5E"},{"key":"age31to44","label":"31–44歲","color":"#B565A7"},{"key":"age45to70","label":"45–70歲","color":"#5A9367"},{"key":"age71plus","label":"71歲以上","color":"#6C757D"}],"gatheringGroups":[{"key":"child","label":"兒童主日學","color":"#83A95C"},{"key":"youth","label":"青少年聚會","color":"#E2944A"},{"key":"adult","label":"成人聚會","color":"#295E8A"}],"estimatedGatheringGroups":[{"key":"child","label":"兒童主日學（0-12歲）","color":"#83A95C"},{"key":"youth","label":"青少年聚會（13-22歲）","color":"#F3B562"},{"key":"adult23to30","label":"成人 23–30歲（推估）","color":"#E77D5E"},{"key":"adult31to44","label":"成人 31–44歲（推估）","color":"#B565A7"},{"key":"adult45to70","label":"成人 45–70歲（推估）","color":"#5A9367"},{"key":"adult71plus","label":"成人 71歲以上（推估）","color":"#6C757D"}],"counties":[{"county":"台北市","totalPopulation":2490869,"ages":{"age0to4":78523,"age5to12":182661,"age13to22":200578,"age23to30":211230,"age31to44":488198,"age45to70":975527,"age71plus":354152},"gatherings":{"adult":84844,"youth":9840,"child":10906,"adult23to30":8832,"adult31to44":20413,"adult45to70":40790,"adult71plus":14809,"total":105590}},{"county":"新北市","totalPopulation":4047001,"ages":{"age0to4":114419,"age5to12":269365,"age13to22":345522,"age23to30":400938,"age31to44":853197,"age45to70":1632706,"age71plus":430854},"gatherings":{"adult":42218,"youth":7008,"child":6893,"adult23to30":5102,"adult31to44":10857,"adult45to70":20776,"adult71plus":5483,"total":56119}},{"county":"桃園市","totalPopulation":2338648,"ages":{"age0to4":89129,"age5to12":184703,"age13to22":225082,"age23to30":253608,"age31to44":517797,"age45to70":861813,"age71plus":206516},"gatherings":{"adult":23919,"youth":4132,"child":4668,"adult23to30":3297,"adult31to44":6732,"adult45to70":11205,"adult71plus":2685,"total":32719}},{"county":"台中市","totalPopulation":2860601,"ages":{"age0to4":99133,"age5to12":224114,"age13to22":270612,"age23to30":311439,"age31to44":623078,"age45to70":1065034,"age71plus":267191},"gatherings":{"adult":33040,"youth":5082,"child":6170,"adult23to30":4540,"adult31to44":9082,"adult45to70":15524,"adult71plus":3894,"total":44292}},{"county":"台南市","totalPopulation":1858651,"ages":{"age0to4":53591,"age5to12":127169,"age13to22":156707,"age23to30":183376,"age31to44":390093,"age45to70":735813,"age71plus":211902},"gatherings":{"adult":23954,"youth":3131,"child":3904,"adult23to30":2888,"adult31to44":6143,"adult45to70":11587,"adult71plus":3336,"total":30989}},{"county":"高雄市","totalPopulation":2731412,"ages":{"age0to4":82948,"age5to12":177775,"age13to22":230138,"age23to30":274399,"age31to44":555260,"age45to70":1093011,"age71plus":317881},"gatherings":{"adult":42760,"youth":5912,"child":6597,"adult23to30":5237,"adult31to44":10597,"adult45to70":20860,"adult71plus":6066,"total":55269}},{"county":"基隆市","totalPopulation":361441,"ages":{"age0to4":8389,"age5to12":21054,"age13to22":28782,"age23to30":37936,"age31to44":70131,"age45to70":151384,"age71plus":43765},"gatherings":{"adult":4333,"youth":705,"child":647,"adult23to30":542,"adult31to44":1002,"adult45to70":2163,"adult71plus":626,"total":5685}},{"county":"新竹市","totalPopulation":457242,"ages":{"age0to4":17946,"age5to12":43189,"age13to22":47679,"age23to30":44264,"age31to44":98883,"age45to70":163707,"age71plus":41574},"gatherings":{"adult":6753,"youth":1113,"child":1347,"adult23to30":858,"adult31to44":1916,"adult45to70":3173,"adult71plus":806,"total":9213}},{"county":"嘉義市","totalPopulation":262177,"ages":{"age0to4":7505,"age5to12":19875,"age13to22":25688,"age23to30":28520,"age31to44":50311,"age45to70":99981,"age71plus":30297},"gatherings":{"adult":3922,"youth":539,"child":579,"adult23to30":535,"adult31to44":944,"adult45to70":1875,"adult71plus":568,"total":5040}},{"county":"新竹縣","totalPopulation":594641,"ages":{"age0to4":24677,"age5to12":53553,"age13to22":61838,"age23to30":61750,"age31to44":131277,"age45to70":210266,"age71plus":51280},"gatherings":{"adult":5455,"youth":1064,"child":1297,"adult23to30":741,"adult31to44":1575,"adult45to70":2523,"adult71plus":616,"total":7816}},{"county":"苗栗縣","totalPopulation":532854,"ages":{"age0to4":14135,"age5to12":37733,"age13to22":49897,"age23to30":55782,"age31to44":109612,"age45to70":202497,"age71plus":63198},"gatherings":{"adult":3826,"youth":620,"child":866,"adult23to30":495,"adult31to44":973,"adult45to70":1797,"adult71plus":561,"total":5312}},{"county":"彰化縣","totalPopulation":1225675,"ages":{"age0to4":41679,"age5to12":82135,"age13to22":115134,"age23to30":132565,"age31to44":252465,"age45to70":456791,"age71plus":144906},"gatherings":{"adult":7559,"youth":1083,"child":1342,"adult23to30":1016,"adult31to44":1934,"adult45to70":3499,"adult71plus":1110,"total":9984}},{"county":"南投縣","totalPopulation":472299,"ages":{"age0to4":12748,"age5to12":28353,"age13to22":41151,"age23to30":50194,"age31to44":90035,"age45to70":187570,"age71plus":62248},"gatherings":{"adult":7193,"youth":1002,"child":1447,"adult23to30":926,"adult31to44":1660,"adult45to70":3459,"adult71plus":1148,"total":9642}},{"county":"雲林縣","totalPopulation":658427,"ages":{"age0to4":20629,"age5to12":39560,"age13to22":59951,"age23to30":70431,"age31to44":124855,"age45to70":254528,"age71plus":88473},"gatherings":{"adult":3818,"youth":589,"child":709,"adult23to30":500,"adult31to44":886,"adult45to70":1805,"adult71plus":627,"total":5116}},{"county":"嘉義縣","totalPopulation":478786,"ages":{"age0to4":11645,"age5to12":22845,"age13to22":39778,"age23to30":51370,"age31to44":87927,"age45to70":195465,"age71plus":69756},"gatherings":{"adult":3013,"youth":564,"child":815,"adult23to30":383,"adult31to44":655,"adult45to70":1456,"adult71plus":519,"total":4392}},{"county":"屏東縣","totalPopulation":789239,"ages":{"age0to4":21888,"age5to12":46819,"age13to22":65906,"age23to30":85383,"age31to44":151795,"age45to70":318636,"age71plus":98812},"gatherings":{"adult":16113,"youth":2049,"child":3048,"adult23to30":2102,"adult31to44":3736,"adult45to70":7843,"adult71plus":2432,"total":21210}},{"county":"宜蘭縣","totalPopulation":449212,"ages":{"age0to4":13536,"age5to12":29653,"age13to22":39669,"age23to30":48403,"age31to44":88259,"age45to70":175638,"age71plus":54054},"gatherings":{"adult":4834,"youth":734,"child":1076,"adult23to30":639,"adult31to44":1165,"adult45to70":2318,"adult71plus":712,"total":6644}},{"county":"花蓮縣","totalPopulation":315374,"ages":{"age0to4":9576,"age5to12":20255,"age13to22":27796,"age23to30":33449,"age31to44":60275,"age45to70":125664,"age71plus":38359},"gatherings":{"adult":11883,"youth":1513,"child":2428,"adult23to30":1542,"adult31to44":2779,"adult45to70":5794,"adult71plus":1768,"total":15824}},{"county":"台東縣","totalPopulation":210219,"ages":{"age0to4":6779,"age5to12":13084,"age13to22":18818,"age23to30":22524,"age31to44":39587,"age45to70":84080,"age71plus":25347},"gatherings":{"adult":6643,"youth":1164,"child":1728,"adult23to30":872,"adult31to44":1533,"adult45to70":3256,"adult71plus":982,"total":9535}},{"county":"澎湖縣","totalPopulation":107901,"ages":{"age0to4":3773,"age5to12":5388,"age13to22":9740,"age23to30":12637,"age31to44":21812,"age45to70":41724,"age71plus":12827},"gatherings":{"adult":678,"youth":97,"child":190,"adult23to30":96,"adult31to44":166,"adult45to70":318,"adult71plus":98,"total":965}},{"county":"金門縣","totalPopulation":143601,"ages":{"age0to4":3427,"age5to12":6323,"age13to22":12496,"age23to30":17906,"age31to44":29035,"age45to70":60817,"age71plus":13597},"gatherings":{"adult":398,"youth":122,"child":118,"adult23to30":59,"adult31to44":95,"adult45to70":199,"adult71plus":45,"total":638}},{"county":"連江縣","totalPopulation":13950,"ages":{"age0to4":452,"age5to12":730,"age13to22":1223,"age23to30":1839,"age31to44":3070,"age45to70":5480,"age71plus":1156},"gatherings":{"adult":98,"youth":7,"child":7,"adult23to30":16,"adult31to44":26,"adult45to70":47,"adult71plus":9,"total":112}}]};
+    const state = { section: "population", mode: "count", hiddenGroups: new Set() };
+    const els = {
+      chartTitle: document.getElementById("chart-title"),
+      unit: document.getElementById("unit"),
+      legend: document.getElementById("legend"),
+      chart: document.getElementById("chart"),
+      tableHead: document.getElementById("table-head"),
+      tableBody: document.getElementById("table-body"),
+      note: document.getElementById("method-note"),
+      source: document.getElementById("source"),
+      tooltip: document.getElementById("tooltip"),
+    };
+    const numberFormatter = new Intl.NumberFormat("zh-TW");
+    const formatNumber = (value) => numberFormatter.format(value);
+    const formatShare = (value) => (value * 100).toFixed(1) + "%";
+
+    function config() {
+      if (state.section === "population") {
+        return {
+          title: "各縣市人口年齡結構",
+          note: state.mode === "count" ? "" : "每一長條代表該縣市總人口的 100%，可直接比較年齡結構。",
+          source: '資料來源：<a href="https://www.gender.ey.gov.tw/gecdb/Stat_Statistics_Query.aspx?sn=Jvwu1Ndiotx2AzKr6MD1kg%40%40&amp;statsn=EcfUJy%24sRRPbnOe4TvO%24Jg%40%40&amp;d=m9ww9odNZAz2Rc5Ooj%24wIQ%40%40" target="_blank" rel="noreferrer">內政部 - 現住人口數</a>',
+          groups: DATA.populationGroups,
+          total: (county) => county.totalPopulation,
+          value: (county, group) => county.ages[group.key],
+          unit: state.mode === "count" ? "單位：人" : "單位：各縣市總人口占比",
+        };
+      }
+      if (state.section === "gathering") return {
+        title: "各縣市教會聚會人數結構",
+        note: state.mode === "count" ? "" : "每一長條代表該縣市三類原始聚會人數合計的 100%，可比較聚會組成。",
+        source: '資料來源：<a href="https://trends.ccea.org.tw/article/2024%e5%8f%b0%e7%81%a3%e6%95%99%e6%9c%83%e6%99%ae%e6%9f%a5%e5%a0%b1%e5%91%8a%e9%9b%bb%e5%ad%90%e7%89%8820260128.pdf" target="_blank" rel="noreferrer">社團法人中華基督教福音協進會《2024 台灣基督教會普查報告》</a>',
+        groups: DATA.gatheringGroups,
+        total: (county) => county.gatherings.total,
+        value: (county, group) => county.gatherings[group.key],
+        unit: state.mode === "count" ? "單位：平均聚會人數" : "單位：各縣市聚會人數占比",
+      };
+      return {
+        title: "各縣市年齡推估聚會人數",
+        note: state.mode === "count"
+          ? "兒童與青少年為原始填報數；成人以 23 歲以上人口年齡比例進行基準分配推估。"
+          : "每一長條代表該縣市原始兒少人數與推估成人年齡層合計的 100%。",
+        source: '資料來源：<a href="https://www.gender.ey.gov.tw/gecdb/Stat_Statistics_Query.aspx?sn=Jvwu1Ndiotx2AzKr6MD1kg%40%40&amp;statsn=EcfUJy%24sRRPbnOe4TvO%24Jg%40%40&amp;d=m9ww9odNZAz2Rc5Ooj%24wIQ%40%40" target="_blank" rel="noreferrer">內政部 - 現住人口數</a>；<a href="https://trends.ccea.org.tw/article/2024%e5%8f%b0%e7%81%a3%e6%95%99%e6%9c%83%e6%99%ae%e6%9f%a5%e5%a0%b1%e5%91%8a%e9%9b%bb%e5%ad%90%e7%89%8820260128.pdf" target="_blank" rel="noreferrer">社團法人中華基督教福音協進會《2024 台灣基督教會普查報告》</a>',
+        groups: DATA.estimatedGatheringGroups,
+        total: (county) => county.gatherings.total,
+        value: (county, group) => county.gatherings[group.key],
+        unit: state.mode === "count" ? "單位：平均聚會人數" : "單位：各縣市聚會人數占比",
+      };
+    }
+
+    function labelForValue(value) {
+      return state.mode === "count" ? formatNumber(value) : formatShare(value);
+    }
+
+    function render() {
+      const current = config();
+      const maxTotal = Math.max(...DATA.counties.map(current.total));
+      els.chartTitle.textContent = current.title;
+      els.unit.textContent = current.unit;
+      els.note.textContent = current.note;
+      els.note.hidden = !current.note;
+      els.source.innerHTML = current.source;
+      const activeGroups = current.groups.filter((group) => !state.hiddenGroups.has(group.key));
+      const displayedTotal = (county) => activeGroups.reduce((sum, group) => sum + current.value(county, group), 0);
+      const maxDisplayedTotal = Math.max(...DATA.counties.map(displayedTotal));
+      els.legend.innerHTML = current.groups.map((group) => 
+        '<button type="button" class="legend-item" data-group="' + group.key + '" aria-pressed="' + String(!state.hiddenGroups.has(group.key)) + '"><span class="swatch" style="background:' + group.color + '"></span>' + group.label + '</button>'
+      ).join("");
+
+      els.chart.innerHTML = DATA.counties.map((county) => {
+        const total = current.total(county);
+        const shownTotal = displayedTotal(county);
+        const width = state.mode === "count" ? (shownTotal / maxDisplayedTotal) * 100 : 100;
+        const segments = activeGroups.map((group) => {
+          const raw = current.value(county, group);
+          const share = raw / shownTotal;
+          const label = state.mode === "count" ? formatNumber(raw) + " 人" : formatShare(share);
+          return '<span class="segment" tabindex="0" data-county="' + county.county + '" data-group="' + group.key + '" aria-label="' + county.county + '，' + group.label + '，' + label + '" style="background:' + group.color + ';width:' + (share * 100) + '%"></span>';
+        }).join("");
+        const totalLabel = state.mode === "count" ? formatNumber(shownTotal) : "100%";
+        return '<div class="chart-row"><div class="county-label">' + county.county + '</div><div class="track"><div class="bar-fill" style="width:' + width + '%">' + segments + '</div></div><div class="total-label">' + totalLabel + '</div></div>';
+      }).join("");
+
+      els.tableHead.innerHTML = '<tr><th>縣市</th>' + activeGroups.map((group) => '<th>' + group.label + '</th>').join("") + '<th>合計</th></tr>';
+      els.tableBody.innerHTML = DATA.counties.map((county) => {
+        const total = displayedTotal(county);
+        const cells = activeGroups.map((group) => {
+          const raw = current.value(county, group);
+          return '<td>' + labelForValue(state.mode === "count" ? raw : raw / total) + '</td>';
+        }).join("");
+        return '<tr><td>' + county.county + '</td>' + cells + '<td>' + (state.mode === "count" ? formatNumber(total) : "100.0%") + '</td></tr>';
+      }).join("");
+
+      document.querySelectorAll("[data-section]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.section === state.section)));
+      document.querySelectorAll("[data-mode]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode)));
+    }
+
+    document.querySelectorAll("[data-section]").forEach((button) => button.addEventListener("click", () => {
+      state.section = button.dataset.section;
+      state.hiddenGroups.clear();
+      render();
+    }));
+    document.querySelectorAll("[data-mode]").forEach((button) => button.addEventListener("click", () => {
+      state.mode = button.dataset.mode;
+      render();
+    }));
+    els.legend.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-group]");
+      if (!button) return;
+      const key = button.dataset.group;
+      const current = config();
+      const visibleCount = current.groups.filter((group) => !state.hiddenGroups.has(group.key)).length;
+      if (state.hiddenGroups.has(key)) state.hiddenGroups.delete(key);
+      else if (visibleCount > 1) state.hiddenGroups.add(key);
+      render();
+    });
+    function moveTooltip(x, y) {
+      const gap = 14;
+      const maxX = window.innerWidth - els.tooltip.offsetWidth - gap;
+      const maxY = window.innerHeight - els.tooltip.offsetHeight - gap;
+      els.tooltip.style.left = Math.max(gap, Math.min(x + gap, maxX)) + "px";
+      els.tooltip.style.top = Math.max(gap, Math.min(y + gap, maxY)) + "px";
+    }
+    function showTooltip(segment, x, y) {
+      const current = config();
+      const county = DATA.counties.find((item) => item.county === segment.dataset.county);
+      const group = current.groups.find((item) => item.key === segment.dataset.group);
+      const raw = current.value(county, group);
+      const share = raw / current.total(county);
+      const noun = state.section === "population" ? "人口" : "平均聚會人數";
+      els.tooltip.innerHTML = "<strong>" + county.county + "｜" + group.label + "</strong><div>" + noun + "：" + formatNumber(raw) + " 人</div><div>占該縣市：" + formatShare(share) + "</div>";
+      els.tooltip.style.display = "block";
+      moveTooltip(x, y);
+    }
+    function hideTooltip() { els.tooltip.style.display = "none"; }
+    els.chart.addEventListener("pointerover", (event) => {
+      const segment = event.target.closest(".segment");
+      if (segment) showTooltip(segment, event.clientX, event.clientY);
+    });
+    els.chart.addEventListener("pointermove", (event) => {
+      if (event.target.closest(".segment")) moveTooltip(event.clientX, event.clientY);
+    });
+    els.chart.addEventListener("pointerout", (event) => {
+      if (event.target.closest(".segment")) hideTooltip();
+    });
+    els.chart.addEventListener("focusin", (event) => {
+      const segment = event.target.closest(".segment");
+      if (!segment) return;
+      const rect = segment.getBoundingClientRect();
+      showTooltip(segment, rect.left + rect.width / 2, rect.bottom);
+    });
+    els.chart.addEventListener("focusout", hideTooltip);
+    render();
+  </script>
+</body>
+</html>
